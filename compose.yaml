@@ -1,0 +1,53 @@
+name: websentinel
+
+services:
+  app:
+    build:
+      context: .
+    image: websentinel:local
+    restart: unless-stopped
+    depends_on:
+      ollama-model:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:${WEBSENTINEL_PORT:-8000}:8000"
+    environment:
+      WEBSENTINEL_DB: /data/websentinel.db
+      WEBSENTINEL_OLLAMA_URL: http://ollama:11434
+      WEBSENTINEL_OLLAMA_MODEL: ${WEBSENTINEL_OLLAMA_MODEL:-qwen3:8b}
+      GOOGLE_CSE_API_KEY: ${GOOGLE_CSE_API_KEY:-}
+      GOOGLE_CSE_ID: ${GOOGLE_CSE_ID:-}
+    volumes:
+      - websentinel_data:/data
+      - scanner_home:/home/websentinel
+
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "ps"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  ollama-model:
+    image: ollama/ollama:latest
+    restart: "no"
+    depends_on:
+      ollama:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["ollama pull \"$${MODEL}\""]
+    environment:
+      MODEL: ${WEBSENTINEL_OLLAMA_MODEL:-qwen3:8b}
+    volumes:
+      - ollama_data:/root/.ollama
+    network_mode: "service:ollama"
+
+volumes:
+  websentinel_data:
+  scanner_home:
+  ollama_data:
